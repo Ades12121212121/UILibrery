@@ -498,21 +498,35 @@ function UILibrary.createWindow(title, size, theme)
     
     local currentTheme = themes[theme or "Dark"]
     
-    -- Create ScreenGui
+    -- Create ScreenGui with protected mode for executors
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "ProfessionalUI"
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screenGui.DisplayOrder = 999
     
-    -- Try to parent to CoreGui
-    local success = pcall(function()
-        screenGui.Parent = game:GetService("CoreGui")
-    end)
-    
-    if not success then
-        screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    -- Enhanced parenting logic for executor compatibility
+    local function tryParent()
+        local success = pcall(function()
+            if syn and syn.protect_gui then
+                syn.protect_gui(screenGui)
+                screenGui.Parent = game:GetService("CoreGui")
+            elseif protect_gui then
+                protect_gui(screenGui)
+                screenGui.Parent = game:GetService("CoreGui")
+            else
+                screenGui.Parent = game:GetService("CoreGui")
+            end
+        end)
+        
+        if not success then
+            pcall(function()
+                screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+            end)
+        end
     end
+    
+    tryParent()
     
     -- Create main frame
     local mainFrame = Instance.new("Frame")
