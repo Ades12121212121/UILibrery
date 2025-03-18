@@ -9,6 +9,338 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
+-- Drag and Drop Interface Builder
+local InterfaceBuilder = {
+    dragging = false,
+    selectedElement = nil,
+    gridSize = 10,
+    snapToGrid = true
+}
+
+function InterfaceBuilder:enableDragAndDrop(element)
+    element.Draggable = true
+    
+    element.DragBegan:Connect(function()
+        self.dragging = true
+        self.selectedElement = element
+        
+        -- Create guidelines
+        self:createGuidelines()
+    end)
+    
+    element.DragEnded:Connect(function(x, y)
+        self.dragging = false
+        self.selectedElement = nil
+        
+        -- Cleanup guidelines
+        self:removeGuidelines()
+        
+        -- Snap to grid if enabled
+        if self.snapToGrid then
+            local newX = math.round(x / self.gridSize) * self.gridSize
+            local newY = math.round(y / self.gridSize) * self.gridSize
+            element.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
+    
+    return element
+end
+
+function InterfaceBuilder:createGuidelines()
+    -- Create visual guidelines for alignment
+    local guidelines = Instance.new("Frame")
+    guidelines.Name = "Guidelines"
+    guidelines.BackgroundTransparency = 0.8
+    guidelines.BorderSizePixel = 0
+    guidelines.ZIndex = 999
+    guidelines.Parent = self.selectedElement.Parent
+    
+    -- Add grid lines
+    if self.snapToGrid then
+        for i = 0, self.selectedElement.Parent.AbsoluteSize.X, self.gridSize do
+            local line = Instance.new("Frame")
+            line.Size = UDim2.new(0, 1, 1, 0)
+            line.Position = UDim2.new(0, i, 0, 0)
+            line.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+            line.BackgroundTransparency = 0.8
+            line.Parent = guidelines
+        end
+    end
+end
+
+function InterfaceBuilder:removeGuidelines()
+    local guidelines = self.selectedElement.Parent:FindFirstChild("Guidelines")
+    if guidelines then
+        guidelines:Destroy()
+    end
+end
+
+-- Responsive Design System
+local ResponsiveDesign = {
+    breakpoints = {
+        small = 600,
+        medium = 900,
+        large = 1200
+    },
+    currentBreakpoint = "large"
+}
+
+function ResponsiveDesign:setBreakpoints(breakpoints)
+    self.breakpoints = breakpoints
+end
+
+function ResponsiveDesign:addResponsiveElement(element, styles)
+    local function updateStyle()
+        local viewportSize = workspace.CurrentCamera.ViewportSize.X
+        local newBreakpoint = "large"
+        
+        for breakpoint, size in pairs(self.breakpoints) do
+            if viewportSize <= size then
+                newBreakpoint = breakpoint
+                break
+            end
+        end
+        
+        if styles[newBreakpoint] then
+            for property, value in pairs(styles[newBreakpoint]) do
+                element[property] = value
+            end
+        end
+        
+        self.currentBreakpoint = newBreakpoint
+    end
+    
+    -- Update style initially
+    updateStyle()
+    
+    -- Update style when viewport size changes
+    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateStyle)
+    
+    return element
+end
+
+-- Plugin system
+local plugins = {}
+
+function UILibrary.registerPlugin(name, plugin)
+    if type(plugin) ~= "table" or not plugin.init then
+        error("Plugin must be a table with an init function")
+    end
+    plugins[name] = plugin
+end
+
+function UILibrary.getPlugin(name)
+    return plugins[name]
+end
+
+-- Animation manager
+local AnimationManager = {
+    animations = {},
+    easingStyles = {
+        linear = function(t) return t end,
+        smooth = function(t) return t * t * (3 - 2 * t) end,
+        bounce = function(t)
+            if t < 1/2.75 then return 7.5625 * t * t
+            elseif t < 2/2.75 then t = t - 1.5/2.75; return 7.5625 * t * t + 0.75
+            elseif t < 2.5/2.75 then t = t - 2.25/2.75; return 7.5625 * t * t + 0.9375
+            else t = t - 2.625/2.75; return 7.5625 * t * t + 0.984375 end
+        end
+    }
+}
+
+function AnimationManager:createAnimation(object, properties, duration, style)
+    local animation = {
+        object = object,
+        properties = properties,
+        duration = duration,
+        style = self.easingStyles[style] or self.easingStyles.smooth,
+        startTime = tick(),
+        initialValues = {}
+    }
+    
+    for property, targetValue in pairs(properties) do
+        animation.initialValues[property] = object[property]
+    end
+    
+    table.insert(self.animations, animation)
+    return animation
+end
+
+function AnimationManager:update()
+    for i = #self.animations, 1, -1 do
+        local anim = self.animations[i]
+        local elapsed = tick() - anim.startTime
+        local progress = math.min(elapsed / anim.duration, 1)
+        local easedProgress = anim.style(progress)
+        
+        for property, targetValue in pairs(anim.properties) do
+            local initial = anim.initialValues[property]
+            anim.object[property] = initial:Lerp(targetValue, easedProgress)
+        end
+        
+        if progress >= 1 then
+            table.remove(self.animations, i)
+        end
+    end
+end
+
+-- State management system
+local StateManager = {
+    states = {},
+    listeners = {}
+}
+
+function StateManager:setState(key, value)
+    self.states[key] = value
+    if self.listeners[key] then
+        for _, callback in ipairs(self.listeners[key]) do
+            callback(value)
+        end
+    end
+end
+
+function StateManager:getState(key)
+    return self.states[key]
+end
+
+function StateManager:subscribe(key, callback)
+    if not self.listeners[key] then
+        self.listeners[key] = {}
+    end
+    table.insert(self.listeners[key], callback)
+    
+    return function()
+        local listeners = self.listeners[key]
+        for i, listener in ipairs(listeners) do
+            if listener == callback then
+                table.remove(listeners, i)
+                break
+            end
+        end
+    end
+end
+
+-- Add to UILibrary
+UILibrary.AnimationManager = AnimationManager
+UILibrary.StateManager = StateManager
+
+-- Notification system
+function UILibrary.createNotification(title, message, duration)
+    duration = duration or 3
+    
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 250, 0, 80)
+    notification.Position = UDim2.new(1, -270, 1, -100)
+    notification.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    notification.BorderSizePixel = 0
+    notification.Parent = game:GetService("CoreGui")
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = notification
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 25)
+    titleLabel.Position = UDim2.new(0, 10, 0, 5)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = notification
+    
+    local messageLabel = Instance.new("TextLabel")
+    messageLabel.Size = UDim2.new(1, -20, 0, 40)
+    messageLabel.Position = UDim2.new(0, 10, 0, 30)
+    messageLabel.BackgroundTransparency = 1
+    messageLabel.Text = message
+    messageLabel.Font = Enum.Font.Gotham
+    messageLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    messageLabel.TextSize = 12
+    messageLabel.TextWrapped = true
+    messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+    messageLabel.Parent = notification
+    
+    -- Animation
+    notification.Position = UDim2.new(1, 0, 1, -100)
+    TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+        Position = UDim2.new(1, -270, 1, -100)
+    }):Play()
+    
+    -- Auto close
+    task.delay(duration, function()
+        local closeTween = TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(1, 0, 1, -100)
+        })
+        closeTween:Play()
+        closeTween.Completed:Connect(function()
+            notification:Destroy()
+        end)
+    end)
+    
+    return notification
+end
+
+-- Loading screen component
+function UILibrary.createLoadingScreen(text, parent)
+    local loadingScreen = Instance.new("Frame")
+    loadingScreen.Name = "LoadingScreen"
+    loadingScreen.Size = UDim2.new(1, 0, 1, 0)
+    loadingScreen.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    loadingScreen.BackgroundTransparency = 0.2
+    loadingScreen.ZIndex = 1000
+    loadingScreen.Parent = parent or game:GetService("CoreGui")
+
+    local loadingContainer = Instance.new("Frame")
+    loadingContainer.Size = UDim2.new(0, 200, 0, 100)
+    loadingContainer.Position = UDim2.new(0.5, -100, 0.5, -50)
+    loadingContainer.BackgroundTransparency = 1
+    loadingContainer.ZIndex = 1001
+    loadingContainer.Parent = loadingScreen
+
+    local spinner = Instance.new("ImageLabel")
+    spinner.Size = UDim2.new(0, 40, 0, 40)
+    spinner.Position = UDim2.new(0.5, -20, 0, 0)
+    spinner.BackgroundTransparency = 1
+    spinner.Image = "rbxassetid://4456891"  -- Loading spinner asset
+    spinner.ZIndex = 1002
+    spinner.Parent = loadingContainer
+
+    local loadingText = Instance.new("TextLabel")
+    loadingText.Size = UDim2.new(1, 0, 0, 20)
+    loadingText.Position = UDim2.new(0, 0, 0.7, 0)
+    loadingText.BackgroundTransparency = 1
+    loadingText.Text = text or "Loading..."
+    loadingText.Font = Enum.Font.GothamBold
+    loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    loadingText.TextSize = 16
+    loadingText.ZIndex = 1002
+    loadingText.Parent = loadingContainer
+
+    -- Animate spinner
+    local rotation = 0
+    local connection = RunService.RenderStepped:Connect(function()
+        rotation = rotation + 5
+        spinner.Rotation = rotation
+    end)
+
+    -- Return API
+    return {
+        setProgress = function(progress)
+            loadingText.Text = string.format("Loading... %d%%", progress * 100)
+        end,
+        setText = function(newText)
+            loadingText.Text = newText
+        end,
+        destroy = function()
+            connection:Disconnect()
+            loadingScreen:Destroy()
+        end
+    }
+end
+
 -- Utility functions
 local function createShadow(parent, offset)
     local shadow = Instance.new("ImageLabel")
@@ -82,6 +414,33 @@ function UILibrary.createWindow(title, size, theme)
     local window = {}
     local tabs = {}
     local activeTab = nil
+    local isVisible = true
+    
+    -- Add keyboard shortcuts
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed then
+            -- Toggle UI visibility with Right Shift
+            if input.KeyCode == Enum.KeyCode.RightShift then
+                isVisible = not isVisible
+                screenGui.Enabled = isVisible
+            end
+            
+            -- Quick tab switching with number keys
+            if input.KeyCode.Name:match("^[1-9]$") then
+                local tabNumber = tonumber(input.KeyCode.Name)
+                local tabNames = {}
+                for name, _ in pairs(tabs) do
+                    table.insert(tabNames, name)
+                end
+                table.sort(tabNames)
+                
+                if tabNames[tabNumber] then
+                    local tabButton = tabs[tabNames[tabNumber]].button
+                    tabButton:Fire("MouseButton1Click")
+                end
+            end
+        end
+    end)
     
     -- Theme settings
     local themes = {
@@ -91,6 +450,26 @@ function UILibrary.createWindow(title, size, theme)
             ElementBackground = Color3.fromRGB(35, 35, 45),
             TextColor = Color3.fromRGB(240, 240, 255),
             AccentColor = Color3.fromRGB(40, 120, 255),
+            SuccessColor = Color3.fromRGB(40, 180, 120),
+            WarningColor = Color3.fromRGB(255, 140, 40),
+            ErrorColor = Color3.fromRGB(255, 70, 70)
+        },
+        Light = {
+            Background = Color3.fromRGB(240, 240, 245),
+            SecondaryBackground = Color3.fromRGB(230, 230, 235),
+            ElementBackground = Color3.fromRGB(220, 220, 225),
+            TextColor = Color3.fromRGB(30, 30, 40),
+            AccentColor = Color3.fromRGB(40, 120, 255),
+            SuccessColor = Color3.fromRGB(40, 180, 120),
+            WarningColor = Color3.fromRGB(255, 140, 40),
+            ErrorColor = Color3.fromRGB(255, 70, 70)
+        },
+        Midnight = {
+            Background = Color3.fromRGB(15, 15, 25),
+            SecondaryBackground = Color3.fromRGB(20, 20, 35),
+            ElementBackground = Color3.fromRGB(25, 25, 40),
+            TextColor = Color3.fromRGB(220, 220, 255),
+            AccentColor = Color3.fromRGB(100, 80, 255),
             SuccessColor = Color3.fromRGB(40, 180, 120),
             WarningColor = Color3.fromRGB(255, 140, 40),
             ErrorColor = Color3.fromRGB(255, 70, 70)
@@ -380,6 +759,50 @@ function UILibrary.createWindow(title, size, theme)
             sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
             sectionTitle.Parent = sectionContainer
             
+            -- Create tooltip function
+            local function createTooltip(parent, text)
+                local tooltip = Instance.new("Frame")
+                tooltip.Name = "Tooltip"
+                tooltip.Size = UDim2.new(0, 200, 0, 30)
+                tooltip.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+                tooltip.BorderSizePixel = 0
+                tooltip.Visible = false
+                tooltip.ZIndex = 100
+                
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(0, 4)
+                corner.Parent = tooltip
+                
+                local tooltipText = Instance.new("TextLabel")
+                tooltipText.Size = UDim2.new(1, -10, 1, 0)
+                tooltipText.Position = UDim2.new(0, 5, 0, 0)
+                tooltipText.BackgroundTransparency = 1
+                tooltipText.Text = text
+                tooltipText.Font = Enum.Font.Gotham
+                tooltipText.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tooltipText.TextSize = 12
+                tooltipText.TextWrapped = true
+                tooltipText.Parent = tooltip
+                
+                parent.MouseEnter:Connect(function()
+                    tooltip.Position = UDim2.new(0, Mouse.X + 10, 0, Mouse.Y + 10)
+                    tooltip.Parent = game:GetService("CoreGui")
+                    tooltip.Visible = true
+                end)
+                
+                parent.MouseLeave:Connect(function()
+                    tooltip.Visible = false
+                end)
+                
+                UserInputService.InputChanged:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseMovement then
+                        tooltip.Position = UDim2.new(0, Mouse.X + 10, 0, Mouse.Y + 10)
+                    end
+                end)
+                
+                return tooltip
+            end
+            
             -- Create elements container
             local elementsContainer = Instance.new("Frame")
             elementsContainer.Size = UDim2.new(1, -20, 0, 0)
@@ -652,10 +1075,24 @@ function UILibrary.createWindow(title, size, theme)
             -- Dropdown creation function
             function section:addDropdown(text, options, default, callback)
                 local dropdownContainer = Instance.new("Frame")
-                dropdownContainer.Size = UDim2.new(1, 0, 0, 40)
+                dropdownContainer.Size = UDim2.new(1, 0, 0, 70)
                 dropdownContainer.Position = UDim2.new(0, 0, 0, #elements * 45)
                 dropdownContainer.BackgroundColor3 = currentTheme.ElementBackground
                 dropdownContainer.Parent = elementsContainer
+                
+                local searchBox = Instance.new("TextBox")
+                searchBox.Size = UDim2.new(1, -20, 0, 25)
+                searchBox.Position = UDim2.new(0, 10, 0, 5)
+                searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+                searchBox.PlaceholderText = "Search..."
+                searchBox.Text = default or ""
+                searchBox.Font = Enum.Font.Gotham
+                searchBox.TextColor3 = currentTheme.TextColor
+                searchBox.TextSize = 14
+                searchBox.Parent = dropdownContainer
+                
+                createCorner(searchBox, 4)
+                createStroke(searchBox, 1, Color3.fromRGB(60, 60, 70))
                 
                 createCorner(dropdownContainer, 6)
                 
@@ -1819,6 +2256,101 @@ function UILibrary.createWindow(title, size, theme)
         end
     }
 end
+
+-- Theme Designer and Accessibility Features
+local ThemeDesigner = {
+    themes = {},
+    activeTheme = nil,
+    listeners = {}
+}
+
+function ThemeDesigner:createTheme(name, colors)
+    self.themes[name] = colors
+    return colors
+end
+
+function ThemeDesigner:setTheme(name)
+    if not self.themes[name] then
+        error("Theme '" .. name .. "' does not exist")
+    end
+    
+    self.activeTheme = name
+    local theme = self.themes[name]
+    
+    -- Notify listeners
+    for _, callback in ipairs(self.listeners) do
+        callback(theme)
+    end
+end
+
+function ThemeDesigner:getTheme(name)
+    return self.themes[name or self.activeTheme]
+end
+
+function ThemeDesigner:onThemeChange(callback)
+    table.insert(self.listeners, callback)
+    
+    return function()
+        for i, listener in ipairs(self.listeners) do
+            if listener == callback then
+                table.remove(self.listeners, i)
+                break
+            end
+        end
+    end
+end
+
+-- Accessibility Features
+local Accessibility = {
+    settings = {
+        highContrast = false,
+        largeText = false,
+        screenReader = false,
+        reducedMotion = false
+    },
+    listeners = {}
+}
+
+function Accessibility:setSetting(key, value)
+    if self.settings[key] ~= nil then
+        self.settings[key] = value
+        
+        -- Notify listeners
+        if self.listeners[key] then
+            for _, callback in ipairs(self.listeners[key]) do
+                callback(value)
+            end
+        end
+    end
+end
+
+function Accessibility:getSetting(key)
+    return self.settings[key]
+end
+
+function Accessibility:onSettingChange(key, callback)
+    if not self.listeners[key] then
+        self.listeners[key] = {}
+    end
+    
+    table.insert(self.listeners[key], callback)
+    
+    return function()
+        local listeners = self.listeners[key]
+        for i, listener in ipairs(listeners) do
+            if listener == callback then
+                table.remove(listeners, i)
+                break
+            end
+        end
+    end
+end
+
+-- Add to UILibrary
+UILibrary.InterfaceBuilder = InterfaceBuilder
+UILibrary.ResponsiveDesign = ResponsiveDesign
+UILibrary.ThemeDesigner = ThemeDesigner
+UILibrary.Accessibility = Accessibility
 
 -- Return library API
 return {
